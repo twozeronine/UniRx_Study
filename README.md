@@ -1,21 +1,22 @@
 # UniRx_Study
 
 > [Csharp_Study](https://github.com/twozeronine/Csharp_Study) C# 공부내용 링크
+> [Unity_Study](https://github.com/twozeronine/Unity_Study) Unity 공부내용 링크
 
 Today I Learnred (TIL)
 
 > UniRX Functional Reactive Programming(함수 반응형 프로그래밍)에 대해 공부한 내용을 정리하는 저장소.
 > Microsoft에서 이미 C#용으로 만든 Rx.NET가 있지만 무겁고 기술적인 이슈로 Unity 전용으로 최적화된 UniRx를 사용한다고 한다.
 
-Rx도 하나의 프로그래밍 방법론이고 어떤 언어라도 Rx의 개념은 똑같다 !
+Rx는 하나의 프로그래밍 방법론이고 어떤 언어라도 Rx의 개념은 똑같다 !
 
 ## 참고 사이트
 
-[ReactiveX 공식 사이트](http://reactivex.io/)
-[UniRx 공식 깃허브](https://github.com/neuecc/UniRx)
-[UniRx 소개 slideshare](https://www.slideshare.net/agebreak/160402-unirx)
-[UniRx 시작하기 slideshare](https://www.slideshare.net/agebreak/160409-unirx?from_action=save)
-[Rx와 Functional Reactive Programming으로 고성능 서버 만들기 slideshare](https://www.slideshare.net/jongwookkim/ndc14-rx-functional-reactive-programming)
+[ReactiveX 공식 사이트](http://reactivex.io/)  
+[UniRx 공식 깃허브](https://github.com/neuecc/UniRx)  
+[UniRx 소개 slideshare](https://www.slideshare.net/agebreak/160402-unirx)  
+[UniRx 시작하기 slideshare](https://www.slideshare.net/agebreak/160409-unirx?from_action=save)  
+[Rx와 Functional Reactive Programming으로 고성능 서버 만들기 slideshare](https://www.slideshare.net/jongwookkim/ndc14-rx-functional-reactive-programming)  
 [UniRx에 대해 정리한 블로그](https://rito15.github.io/posts/unity-study-unirx/)
 
 ## Functional Reactive Programming ? 함수형 반응형 프로그래밍이란 ?
@@ -36,7 +37,7 @@ Rx도 하나의 프로그래밍 방법론이고 어떤 언어라도 Rx의 개념
 
 ## 스트림이란 ?
 
-이벤트가 흐르는 파이프 같은 이미지
+### 이벤트가 흐르는 파이프 같은 이미지
 
 - 어렵게 말하자면, \[타임라인에 배열되어 있는 이벤트의 시퀀스 ]
 - 분기 되거나 합쳐지는게 가능하다
