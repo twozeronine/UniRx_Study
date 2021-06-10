@@ -10,14 +10,16 @@ Today I Learnred (TIL)
 
 Rx는 하나의 프로그래밍 방법론이고 어떤 언어라도 Rx의 개념은 똑같다 !
 
+[UniRx를 이용한 예제 목록으로 이동](https://github.com/twozeronine/UniRx_Study/tree/main/Assets/UniRx_Practice_Scripts)
+
 ## 참고 사이트
 
-[ReactiveX 공식 사이트](http://reactivex.io/)  
-[UniRx 공식 깃허브](https://github.com/neuecc/UniRx)  
-[UniRx 소개 slideshare](https://www.slideshare.net/agebreak/160402-unirx)  
-[UniRx 시작하기 slideshare](https://www.slideshare.net/agebreak/160409-unirx?from_action=save)  
-[Rx와 Functional Reactive Programming으로 고성능 서버 만들기 slideshare](https://www.slideshare.net/jongwookkim/ndc14-rx-functional-reactive-programming)  
-[UniRx에 대해 정리한 블로그](https://rito15.github.io/posts/unity-study-unirx/)
+- [ReactiveX 공식 사이트](http://reactivex.io/)
+- [UniRx 공식 깃허브](https://github.com/neuecc/UniRx)
+- [UniRx 소개 slideshare](https://www.slideshare.net/agebreak/160402-unirx)
+- [UniRx 시작하기 slideshare](https://www.slideshare.net/agebreak/160409-unirx?from_action=save)
+- [Rx와 Functional Reactive Programming으로 고성능 서버 만들기 slideshare](https://www.slideshare.net/jongwookkim/ndc14-rx-functional-reactive-programming)
+- [UniRx에 대해 정리한 블로그](https://rito15.github.io/posts/unity-study-unirx/)
 
 ## Functional Reactive Programming ? 함수형 반응형 프로그래밍이란 ?
 
