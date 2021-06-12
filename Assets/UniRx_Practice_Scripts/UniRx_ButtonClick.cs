@@ -10,14 +10,18 @@ public class UniRx_ButtonClick : UI_Base
   {
     Button,
     MutipleButton,
+    CrossButton1,
+    CrossButton2,
   }
   enum Texts
   {
     Text,
   }
-  Button button;
-  Button MutipleButton;
-  Text text;
+  [SerializeField] Button button;
+  [SerializeField] Button MutipleButton;
+  [SerializeField] Button CrossButton1;
+  [SerializeField] Button CrossButton2;
+  [SerializeField] Text text;
 
   // Base.Start() => Init()
   public override void Init()
@@ -27,6 +31,7 @@ public class UniRx_ButtonClick : UI_Base
     DoMultipleClick();
   }
 
+  // 바인딩 함수
   void Binding()
   {
     Bind<Button>(typeof(Buttons));
@@ -34,7 +39,11 @@ public class UniRx_ButtonClick : UI_Base
     button = GetButton((int)Buttons.Button);
     text = GetText((int)Texts.Text);
     MutipleButton = GetButton((int)Buttons.MutipleButton);
+    CrossButton1 = GetButton((int)Buttons.CrossButton1);
+    CrossButton2 = GetButton((int)Buttons.CrossButton2);
   }
+
+  // 클릭하면 텍스트 내용을 바꿈
   void DoChangeText()
   {
 
@@ -49,11 +58,23 @@ public class UniRx_ButtonClick : UI_Base
           .SubscribeToText(text, _ => "Clicked"); //위와 동일한 기능
   }
 
+  // 세번클릭하는 이벤트 감지 
   void DoMultipleClick()
   {
     MutipleButton.OnClickAsObservable()
                  .Buffer(3)
                  .SubscribeToText(text, _ => "MultipleClick");
+  }
+
+  // 양쪽이 교차로 1회씩 눌릴 때 Text에 표시한다
+  //// 연타하더라도 [1회 눌림]으로 판정한다
+  void CrossButtonClick()
+  {
+    CrossButton1.OnClickAsObservable()
+                .Zip(CrossButton2.OnClickAsObservable(), (b1, b2) => "Clicked!")
+                .First() // 1번 동작한 후에 Zip내의 버퍼를 클리어 한다
+                .Repeat() // Zip 내의 메시지큐를 리셋하기 위해
+                .SubscribeToText(text, x => text.text + x + "\n");
   }
 
 }

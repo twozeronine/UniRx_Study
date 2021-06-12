@@ -270,7 +270,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 0
     m_LineSpacing: 1
-  m_Text: ZipButton
+  m_Text: CrossButton2
 --- !u!222 &505894379
 CanvasRenderer:
   m_ObjectHideFlags: 0
@@ -545,7 +545,7 @@ GameObject:
   - component: {fileID: 1261334696}
   - component: {fileID: 1261334695}
   m_Layer: 5
-  m_Name: ZipButton1
+  m_Name: CrossButton1
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -902,7 +902,7 @@ GameObject:
   - component: {fileID: 1289054460}
   - component: {fileID: 1289054459}
   m_Layer: 5
-  m_Name: ZipButton2
+  m_Name: CrossButton2
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -1193,7 +1193,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 0
     m_LineSpacing: 1
-  m_Text: ZipButton
+  m_Text: CrossButton1
 --- !u!222 &1701094608
 CanvasRenderer:
   m_ObjectHideFlags: 0
