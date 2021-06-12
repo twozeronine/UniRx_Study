@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using UniRx;
+using UniRx.Triggers;
+using System;
 
 public class UniRx_ButtonClick : UI_Base
 {
@@ -29,6 +31,8 @@ public class UniRx_ButtonClick : UI_Base
     Binding();
     DoChangeText();
     DoMultipleClick();
+    CrossButtonClick();
+    OnDoubleClick();
   }
 
   // 바인딩 함수
@@ -71,10 +75,22 @@ public class UniRx_ButtonClick : UI_Base
   void CrossButtonClick()
   {
     CrossButton1.OnClickAsObservable()
-                .Zip(CrossButton2.OnClickAsObservable(), (b1, b2) => "Clicked!")
+                .Zip(CrossButton2.OnClickAsObservable(), (b1, b2) => "CrossClicked!")
                 .First() // 1번 동작한 후에 Zip내의 버퍼를 클리어 한다
                 .Repeat() // Zip 내의 메시지큐를 리셋하기 위해
-                .SubscribeToText(text, x => text.text + x + "\n");
+                .SubscribeToText(text, x => x + "\n");
+  }
+
+  void OnDoubleClick()
+  {
+    var clickStream = this.UpdateAsObservable()
+        .Where(_ => Input.GetMouseButtonDown(0));
+
+    clickStream.Buffer(clickStream.Throttle(TimeSpan.FromMilliseconds(200)))
+        .Where(x => x.Count >= 2)
+        .SubscribeToText(text, x =>
+            string.Format("DoubleClick detected! \n Count:{0}", x.Count));
+
   }
 
 }
