@@ -1,6 +1,6 @@
-## UniRx의 사용예
+# UniRx의 사용예
 
-### Update를 없애기
+## Update를 없애기
 
 - Update()를 Observable로 변환해서 Awake()/Start()에 모아서 작성하기
 
@@ -117,3 +117,90 @@ AddTo
         .AddTo(this.gameObject); // AddTo로 넘겨진 gameObject가 Destroy되면 같이 Dispose 된다
   }
 ```
+
+## 컴포넌트를 스트림으로 연결하기
+
+컴포넌트를 스트림으로 연결하는 것으로, Observer패턴한 설계로 만들 수 있다
+
+- 전체가 이벤트 기반이 되게 할 수 있다
+- 더불어 Rx는 Observer패턴 그 자체
+
+타이머의 카운트를 화면에 표시 한다
+
+- UniRx를 사용하지 않고 구현
+
+```C#
+public class TimerDisplayComponent : MonoBehaviour
+{
+  [SerializeField]
+  private TimerComponent _timerComponent;
+  private Text _timerText;
+
+  void Start()
+  {
+    _timerText = GetComponent<Text>();
+  }
+
+  void Update() // 매 프레임, 값이 변경되었는지를 확인 한다
+  {
+    var currentTimeText = _timerComponent.CurrentTime.ToString();
+
+    if(currentTimeText != _timerText.text)
+    {
+      _timerText.text = currentTimeText;
+    }
+  }
+}
+
+```
+
+- UniRx의 스트림으로 구현
+
+```C#
+
+// 타이머측을 스트림으로 변경
+public class TimerComponent : MonoBehaviour
+{
+  private readonly ReactiveProperty<int> _timerReactiveProperty = new IntReactiveProperty(30);
+
+  public ReadOnlyReactiveProperty<int> CurrentTime
+  {
+    get { return _timerReactiveProperty.ToReadOnlyReactiveProperty(); }
+  }
+
+  private void Start()
+  {
+    Observable.Timer(TimeSpan.FromSeconds(1)) // 1초마다 timerReactiveProperty 값을 마이너스 한다
+      .Subscribe( _ => _timerReactiveProperty.Value-- )
+      .AddTo(gameObject); // 게임 오브젝트 파괴시에 자동 정지 시킨다
+  }
+}
+
+// 타이머를 사용하는 측의 구현
+public class TimerDisplayComponent : MonoBehaviour
+{
+  [SerializeField]
+  private TimerComponent _timerComponent;
+  private Text _timerText;
+
+  void Start()
+  {
+    _timerComponent.CurrentTime // 타이머에서 값 갱신 통지가 오면, 그 타이밍에 Text를 변경하는것뿐
+      .SubscribeToText(_timerText);
+  }
+}
+
+```
+
+### 스트림으로 연결하는 메리트
+
+Observer 패턴이 간단히 구현 가능하다
+
+- 변화를 폴링(Polling)하는 구현이 사라진다
+- 필요한 타이밍에 필요한 처리를 하는 방식으로 작성하는 것이 좋다
+
+기존의 이벤트 통지구조보다 간단
+
+- C#의 Event는 준비단계가 귀찮아서 쓰고 싶지 않다
+- Unity의 SendMessage는 쓰고 싶지 않다
+- Rx라면 Observable를 준비하면 OK! 간단!
