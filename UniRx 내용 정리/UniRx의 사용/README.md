@@ -204,3 +204,117 @@ Observer 패턴이 간단히 구현 가능하다
 - C#의 Event는 준비단계가 귀찮아서 쓰고 싶지 않다
 - Unity의 SendMessage는 쓰고 싶지 않다
 - Rx라면 Observable를 준비하면 OK! 간단!
+
+## UniRx와 UGUI를 조합하기
+
+uGUI에서 사용할 수 있는 Model-View-00 패턴
+
+- uGUI에 유용한 MVO패턴이 지금까지 존재하지 않았다
+  -- MVC 패턴은 원래 사람에 따라서 개념이 각각 너무 다름
+  -- MVVM은 데이터바인딩이 없기 때문에 사용할 수 없다
+
+- Obervable과 ReactiveProperty를 조합하게 되면, uGUI 관련을 깔끔하게 작성가능
+
+### Model-View-(Reactive)Presenter
+
+MV(R)P 패턴
+
+- Model – View – Presenter 패턴 + UniRx
+- 3개의 레이어를 Observable로 심리스하게 연결
+
+![Rx MVP패턴](https://user-images.githubusercontent.com/85855054/122228490-da9c0e80-cef2-11eb-8951-439dd4af57c8.png)
+
+### MV(R)P패턴 만드는 법
+
+1. Model에 ReactiveProperty를 가지게 한다
+2. Presenter을 만든다
+3. Presenter에 Model과 View를 등록 한다
+4. Presenter내에서 View의 Observable과 Model의 ReactiveProperty 각각 Subscribe해서 연결한다
+
+![Rx MVP 사용 예](https://user-images.githubusercontent.com/85855054/122230381-927deb80-cef4-11eb-89e0-2a38ef35e890.png)
+![Rx MVP 사용 예2](https://user-images.githubusercontent.com/85855054/122230390-93af1880-cef4-11eb-8a5f-73d954d1a7b2.png)
+![Rx MVP 컴포넌트 관계도](https://user-images.githubusercontent.com/85855054/122229177-7e85ba00-cef3-11eb-82d3-29b435576080.png)
+
+### Model의 구현
+
+```C#
+public class ConfigComponent : SingletonMonoBehaviour<ConfigComponent>
+{
+  //ReactiveProperty를 외부에 공개
+  // 읽어들이는 타이밍(ms)
+  public ReactiveProperty<int> SpeechTimingReactiveProperty = new IntReactiveProperty(0);
+}
+
+```
+
+### Presenter의 구현 (Slider 측)
+
+```C#
+using UnityEngine;
+using UniRx;
+using UnityEngine.UI;
+
+public class SpeechTimingSliderPresenter : MonoBehaviour
+{
+  void Start()
+  {
+     var slider = GetComponent<Slider>();
+     var config = ConfigComponent.Instance;
+
+      // Model (ConfigComponent) -> View (slider)
+     config.SpeechTimingReactiveProperty
+           .SubScribe( x => slider.value = x / 10 );
+
+      //View (slider) -> Model (ConfigComponent)
+      Slider
+        .OnValueChangedAsObservable()
+        .DistinctUntilChanged()
+        .Subscribe( x => config.SpeechTimingReactiveProperty.Value = (int)(x * 10));
+  }
+}
+
+```
+
+### Presenter의 구현 (Input 측)
+
+```C#
+using System;
+using UnityEngine;
+using UniRx;
+using UnityEngine.UI;
+
+public class SpeechTimingInputField : MonoBehaviour
+{
+  void Start()
+  {
+     var config = ConfigComponent.Instance;
+     var inputField = GetComponent<InputField>();
+
+      // View -> Model
+    inputField.OnEndEditAsObservable()
+        .Select( x => Int32.Parse(x))
+        .Select( x => Mathf.Clamp(x, -1500, 1500))
+        .Subscribe( x => config.SpeechTiming = x );
+
+
+      // Model -> View
+      config
+        .SpeechTimingObservable
+        .Select( x => x.ToString())
+        .Subscribe( x => )
+  }
+}
+```
+
+### uGUI와 조합하기 정리
+
+MV(R)P 패턴으로 uGUI 관련 설계가 편해진다
+
+- uGUI를 사용할 경우에 아마도 현시점에서의 최적 해결법
+- 프로그래머에게는 다루기 쉽지만, 비프로그래머에게는 다루기 어려워질 가능성이 있으니 주의
+
+Presenter의 베스트한 작성 방법에 대해서는 아직 모색중
+
+- Presenter에 어떻게 Model과 View를 등록할 것인가
+- Presenter을 하나로 모을 것인가, 분할해서 만들 것인가
+- 동적으로 Presenter를 생성하는 경우에는 어떻게 할 것인가
