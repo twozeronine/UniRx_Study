@@ -318,3 +318,120 @@ Presenter의 베스트한 작성 방법에 대해서는 아직 모색중
 - Presenter에 어떻게 Model과 View를 등록할 것인가
 - Presenter을 하나로 모을 것인가, 분할해서 만들 것인가
 - 동적으로 Presenter를 생성하는 경우에는 어떻게 할 것인가
+
+## 코루틴과 조합하기
+
+Unity의 코루틴과 Observable은 상호교환가능
+
+- 코루틴과 조합함으로서 Rx의 약점을 보완하는 것이 가능하다
+
+코루틴 -> Observable : Observable.FromCoroutine
+
+Observable -> 코루틴 : StartAsCoroutine
+
+### 코루틴 -> Observable의 메리트
+
+복잡한 스트림을 간단하게 작성 가능
+
+- 팩토리 메소드나 오퍼레이터 체인 만으로는 작성할 수 없는 복잡한 로직의 스트림을 작성하는 것이 가능하다
+
+연속적인 처리를 캡슐화 가능하다
+
+- 복잡한 처리를 코루틴에 숨겨서 외부에서는 Observable로서 선언적으로 취급하는 것이 가능하다
+
+### 예제) 코루틴으로부터 Observable을 만들기
+
+> 코루틴 -> Observable
+
+플레이어의 생사에 연동된 타이머
+
+- 플레이어가 살아있을 때만 카운트다운
+- 플레이어가 사망했을 때는 타이머를 정지한다
+- 팩토리메소드나 오퍼레이터 체인으로 만드는것은 복잡하다
+
+```C#
+
+private void Start()
+{
+  // 타이머의 Subscribe
+  Observable.FromCoroutine<int>( observer => CountDownCoroutine(observer, 30, player))
+      .Subscribe(count => Debug.Log(count));
+}
+
+// 플레이어가 살아있을때만 카운트 다운하는 타이머
+// 플레이어가 죽어있는 때는 카운트는 정지한다
+IEnumerator CountDownCoroutine(IObserver<int> observer, int startTime, Player player)
+{
+  var currentTime = startTime;
+  while( currentTime > 0 )
+  {
+    if(player.IsAlive)
+    {
+      observer.OnNext(currentTime--);
+    }
+    yield return new WaitForSeconds(1);
+  }
+  observer.OnNext(0);
+  observer.OnCompleted();
+}
+
+```
+
+### 예제) Observable로 부터 코루틴을 만들기
+
+StartAsCoroutine
+
+- OnCompleted가 발생되기 전에 yield return null을 계속 한다
+- 완료시에 최후의 OnNext값을 하나 출력 한다
+
+```C#
+var v = default(int);
+yield return Observable.Range(1, 10).StartAsCoroutine( x => v = x );
+Debug.Log(v); // 10
+
+```
+
+비동기 처리를 동기처리처럼 쓸 수 있게 된다
+-Task의 await와 비슷한 일을 Unity 코루틴으로 실현 가능
+
+구현 예시
+
+텍스트를 Web으로부터 다운로드
+버튼으로 텍스트를 넘기면서 표시한다
+
+```C#
+private void Start()
+{
+  StartCoroutine(ShowTextCoroutine());
+}
+
+private IEnumerator ShowTextCoroutine()
+{
+  _text.text = "Hello World!";
+
+  IEnumerator<string> textIterator = null;
+
+  // 텍스트를 다운로드해서 변환한다
+  yield return ObservableWWW.Get(url)
+      .Select( result => TextParser(url))
+      .StartAsCoroutine(iterator => textIterator = iterator );
+
+  _text.text += "This is UniRx...";
+
+  while(textIterator.MoveNext())
+  {
+    _text.text += textIterator.Currnet;
+    // 버튼 클릭이 올때까지 대기 한다
+    yield return _nextButton.OnClickAsObservable().FirstOrDefault().StartAsCoroutine();
+  }
+}
+
+```
+
+### 코루틴과 조합하기 정리
+
+Unity의 코루틴과 Observable은 상호교환가능
+
+- 복잡한 스트림을 코루틴을 사용해서 구현 가능
+- 코루틴 안에서 이벤트를 기다리는 것이 가능
+- 비동기처리를 동기처리처럼 작성하는 것이 가능하게 된다
