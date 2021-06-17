@@ -202,3 +202,74 @@ public class RoomsViewer : MonoBehaviour
 }
 
 ```
+
+### 6. 애니메이션 동기화하기
+
+유니티짱이 공을 던진다
+
+- 애니메이션에 동기화 시켜서 던진다
+- 던지는 공의 파라미터도 지정 가능하다
+
+![Rx 공던지기 모션](https://user-images.githubusercontent.com/67315288/122390387-e51ade80-cfac-11eb-9088-6cd6e9623841.png)
+![Rx 공던지기 모션 이벤튼](https://user-images.githubusercontent.com/67315288/122390395-e6e4a200-cfac-11eb-9019-41b42b8f545f.png)
+
+### UniRx를 사용하지 않고 작성하기
+
+```C#
+private int _ballSpeed;
+
+private Vector3 _ballDirection;
+
+// 공을 던지는 처리를 시작한다
+
+private void StartThrowBall(int speed, Vector3 direction )
+{
+  _ballSpeed = speed;
+  _ballDirection = direction;
+  _animator.SetTrigger("TriggerBallThrow"); // 여기에서 Animation 재생 시작
+}
+
+// AnimationEvent의 콜백
+
+private void BallThrowEvent()
+{
+  // 공을 생성해서 던진다
+  var ball = CreateBallAndChangeVelocity( _ballSpeed, _ballDirection );
+  // 5초후 소멸한다
+  Destroy(ball, 5.0f);
+}
+
+```
+
+분명 하나의 연결된 처리인데도 분리된 느낌이 든다.
+
+### StartAsCoroutine으로 작성하기
+
+```C#
+private Subject<Unit> _animationEventSubject = new Subject<Unit>();
+
+// AnimationEvent의 콜백
+
+private void BallThrowEvent()
+{
+  _animationEventSubject.OnNext(Unit.Default); // AnimationEvent를 Observable화
+}
+
+// 공을 던지는 일련의 처리를 하는 코루틴
+// 콜백이 들어간 비동기처리를 동기처리처럼 쓸수 있다
+private IEnumerator ThrowBallCoroutine(int speed, Vector3 direction)
+{
+  var waitStream = _animationEventSubject.FirstOrDefault().Replay();
+  waitStream.Connect();
+
+  // 애니메이션 시작
+  _animator.SetTrigger("TriggerBallThrow");
+
+  // 애니메이션 이벤트가 올때까지 대기
+  yield return waitStream.StartAsCoroutine();
+
+  var ball = CreateBallAndChangeVelocity(speed, direction);
+  Destroy(ball, 5.0f );
+}
+
+```
