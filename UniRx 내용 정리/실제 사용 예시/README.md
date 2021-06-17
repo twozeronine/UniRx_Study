@@ -1,6 +1,6 @@
-## 실제 사용 예 5가지
+# 실제 사용 예 5가지
 
-### 1. 더블 클릭 판정
+## 1. 더블 클릭 판정
 
 ```C#
 
@@ -15,7 +15,7 @@ clickStream.Buffer( clickStream.Throttle(TimeSpan.FromMilliseconds(200)))
           string.Format("DoubleClick detected! \n Count: {0}", x.Count));
 ```
 
-### 2. 값의 변화를 감시하기
+## 2. 값의 변화를 감시하기
 
 플레이어가 지면에 떨어지는 순간에 이펙트를 발생
 
@@ -51,7 +51,7 @@ public class OnGroundedScript : ObservableMonoBehaviour
 
 ```
 
-### 3. 값의 변화를 가다듬기
+## 3. 값의 변화를 가다듬기
 
 isGrounded의 변화를 다듬기
 
@@ -73,7 +73,7 @@ UpdateAsObservable()
 
 ![Rx 변화 가다듬기](https://user-images.githubusercontent.com/85855054/122054848-05b72d00-ce23-11eb-9822-593ee5b2bbc1.png)
 
-### 4. WWW를 사용하기 쉽게 하기
+## 4. WWW를 사용하기 쉽게 하기
 
 기존의 Unity가 제공하는 HTTP 통신용 모듈
 
@@ -143,7 +143,7 @@ ObservableWWW.Get(resoucePathURL)
 
 ```
 
-### 5. 기존 라이브러리를 스트림으로 변환하기 (PhtonCloud 예제)
+## 5. 기존 라이브러리를 스트림으로 변환하기 (PhtonCloud 예제)
 
 Unity에서 간단히 네트워크 대전이 구현 가능한 라이브러리 통지가 전부 콜백이어서 미묘하게 사용하기 나쁨
 
@@ -203,7 +203,7 @@ public class RoomsViewer : MonoBehaviour
 
 ```
 
-### 6. 애니메이션 동기화하기
+## 6. 애니메이션 동기화하기
 
 유니티짱이 공을 던진다
 
@@ -270,6 +270,178 @@ private IEnumerator ThrowBallCoroutine(int speed, Vector3 direction)
 
   var ball = CreateBallAndChangeVelocity(speed, direction);
   Destroy(ball, 5.0f );
+}
+
+```
+
+## 7. Subject\<T>
+
+### 스트림의 소스를 만드는것
+
+- Subject, ReplySubject, BehaviorSubject, AsyncSubject로 여러 종류 있다
+- 외부에 공개할 때에는 반드시 AsObservable을 거쳐서 공개한다
+
+* 외부에서 직접 OnNext가 호출되는 상태로 하지 않음
+
+```C#
+Subject<int> stream = new Subject<int>();
+
+stream
+    .Where( x => x > 10 )
+    .Subscribe( x => Debug.Log(x));
+
+stream.OnNext(1);
+stream.OnNext(20);
+stream.OnNext(30);
+
+stream.OnCompleted();
+```
+
+### Subject를 멈추는 법
+
+Dispose를 호출하면 Subscribe가 중지 된다
+
+- 스트림의 소스가 해제되면 자동적으로 Dispose 된다
+- 스트림이 완료상태가 되어도 Dispose 된다
+- static한 스트림을 만들 경우에는 수동 Dispose가 필요
+
+```C#
+IDisposable disposable = button.onClick
+    .AsObservable()
+    .Subscribe( _ => text.text = "clicked");
+
+disposable.Dispose();
+
+```
+
+## 보충 팁) UpdateAsObservable과 Observable.EveryUpdate
+
+둘다 Update()의 타이밍에 통지되는 Observable
+
+- UpdateAsObservable
+  -- Observable을 계승하는 방식은 없어졌음 대신에 UniRx.Trigger 네임 스페이스에 준비된 확장 메소드를 사용
+  -- IObservable\<Unit>
+  -- 컴포넌트가 Destroy 될때 자동 Dispose
+
+- Observable.EveryUpdate
+  -- 어느 스크립트에서든 사용할 수 있다
+  -- IObservable\<long> (Subscribe된 때부터의 프레임 수)
+  -- 사용이 끝나면 명시적으로 Dispose 할 필요가 있다 혹은 OnCompleted가 제대로 불리는 스트림으로 한다
+
+### 코루틴을 Observable로 변환하기
+
+Observable.FromCoroutine을 사용해서 변경 가능
+
+- 코루틴을 실행순서나 실행 조건을 스트림으로 정의 가능
+
+```C#
+private void Start()
+{
+  Observable.FromCoroutine(CoroutineA)
+      .SelectMany(Observable.FromCoroutine(CoroutineB))
+      .Subscribe( _ => Debug.Log("CoroutineA & CoroutineB are Done."));
+}
+
+private IEnumerator CoroutineA()
+{
+  Debug.Log("CoroutineA start");
+  yield return new WaitForSeconds(1);
+  Debug.Log("CoroutineA end");
+}
+
+private IEnumerator CoroutineB()
+{
+  Debug.Log("CoroutineB start");
+  yield return new WaitForSeconds(1);
+  Debug.Log("CoroutineB end");
+}
+
+```
+
+### UniRx + 코루틴
+
+FromCoroutine\<T>를 사용하면 자유롭게 스트림을 만들 수 있다
+
+```C#
+private void Start()
+{
+  Observable.FromCoroutine<int>(observer => TimerCoroutine(observer,10))
+      .Subscribe( _ => Debug.Log(_));
+}
+
+private IEnumerator TimerCoroutine(IObserver<int> observer, int timeCount )
+{
+  do
+  {
+    observer.OnNext(timeCount);
+    yield return new WaitForSeconds(1.0f);
+  } while ( --timeCount > 0 );
+
+  observer.OnNext(timeCount); // 카운트다운 타이머의 예
+  observer.OnCompleted();
+}
+
+```
+
+하지만 FromCoroutine\<T>로 카운트 다운 타이머를 만드는것보다 Observable.Timer로 만드는것이 스마트하다
+
+```C#
+private void Start()
+{
+  createCountDownObservable(10)
+    .Subscribe( x => Debug.Log(x), () => Debug.Log("OnComplete"));
+}
+
+private IObservable<int> createCountDownObservable(int time)
+{
+  return Observable.Timer(TimeSpan.FromSeconds(0), TimeSpan.FromSeconds(1))
+      .Select( x => (int) (tiem - x ))
+      .Take(time + 1 );
+}
+```
+
+### ObserveOn
+
+처리를 실행하는 스레드를 교체하는 오퍼레이터
+
+- ObserveOn을 사용하는 스레드간에 데이터의 취급을 고려할 필요가 없어진다
+
+```C#
+_button.OnClickAsObservable()
+    .ObserveOn(Scheduler.TreadPool) // 여기서부터 스레드 풀에서 실행
+    .Select( _ => LoadFile())       // 무지하게 무거운 파일을 로드
+    .ObserveOnMainTread()           // 메인 스레드로 복귀
+    .Subscribe(data =>
+    {
+      //Do Someting using data
+    });
+
+```
+
+### 사용 예) 텍스트가 입력되면 검색 서제스트를 뛰우기
+
+1. InputField에 텍스트를 입력 받을 때
+2. 최후에 입력된 때부터 200m초 이상 간극이 생기면
+3. GoogleSuggestAPI를 호출해서
+4. 그때의 서제스틀 결과를 Text 표시한다
+
+```C#
+
+private readonly string _apiUrlFormat
+  ="http://www.google.com/complete/search?hl=ja&output=toolbar&q={0}";
+
+private void Start()
+{
+  _inputField
+      .OnvalueChangeAsObservable()
+      .Throttle(TimeSpan.FromMilliseconds(200))
+      .Where(word => word.Legth > 0 )
+      .SelectMany( word => ObservableWWW.Get(string.Format(_apiUrlFormat, WWW.EscapeURL(word))))
+      .Select(xml => XMLResultToStrings(xml))
+      .Where(suggests => suggests.Any())
+      .SubscribeToText( _text, suggestResults =>
+          suggestResults.Aggregate((s,n)=> s + n + System.Environment.NewLine)
+      );
 }
 
 ```
