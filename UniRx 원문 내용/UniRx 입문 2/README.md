@@ -120,7 +120,8 @@ public class GameInitializer : MonoBehaviour
 
 OnError 메시지는 이름 그대로 예외가 스트림 도중에 발생했을 때에 통지되는 메시지다.
 
-OnError 메시지 스트림 도중에 Catch하여 처리하거나 그대로 Subscribe 메서드에 도달시켜 처리할 수 있다. 만약 OnError 메시지가 Subscribe까지 도달 한 경우, 그 스트림 구독은 종료되고 파기된다.
+OnError 메시지 스트림 도중에 Catch하여 처리하거나 그대로 Subscribe 메서드에 도달시켜 처리할 수 있다.  
+만약 OnError 메시지가 Subscribe까지 도달 한 경우, 그 스트림 구독은 종료되고 파기된다.
 
 ### 예 4) 도중에 발생한 예외를 Subscribe로 받는다
 
@@ -339,3 +340,176 @@ Subject가 파기되면 스트림도 모두 파기된다. 반대로 말하면, S
 스트림의 수명 관리는 세심한 주의를 기울여야 한다. 사용이 끝나면 반드시 Dispose를 호출하거나 OnCompleted를 발행하여야 한다.
 
 ### 예 9) 플레이어의 좌표를 이벤트 알림으로 갱신
+
+액션 게임을 가정하고 생각해보자
+
+-   플레이어를 조작 할 수 있다.
+-   타이머로 시간을 카운트 하고 있다.
+-   타이머가 0이 되었을 때 플레이러를 초기 좌표로 되돌린다.
+-   플레이어는 화면 밖으로 나오면 사망(소멸)한다.
+
+```C#
+
+using System;
+using System.Collections;
+using UniRx;
+using UnityEngine;
+
+/// <summary>
+/// 카운트 다운하고 그때 값을 통지한다.
+/// 3,2,1,0,(OnCompleted) 이런식으로 이벤트가 날라간다.
+/// </summary>
+public class TimeCounter : MonoBehaviour
+{
+    [SerializeField] private int TimeLeft = 3;
+
+    // 타이머 스트림의 실체는 이 Subject
+    private Subject<int> timerSubject = new Subject<int>();
+
+    public IObservable<int> OnTimeChanged => timerSubject;
+
+    private void Start()
+    {
+        StartCoroutine(TimerCoroutine());
+
+        // 현재의 카운트를 표시
+        timerSubject.Subscribe(x => Debug.Log(x));
+    }
+
+    private IEnumerator TimerCoroutine()
+    {
+        yield return null;
+
+        var time = TimeLeft;
+        while (time >= 0)
+        {
+            timerSubject.OnNext(time--);
+            yield return new WaitForSeconds(1);
+        }
+        timerSubject.OnCompleted();
+    }
+}
+
+
+// 플레이어 이동 처리
+// 타이머가 0이되면 초기 좌표로 돌린다.
+public class PlayerMover : MonoBehaviour
+{
+    [SerializeField] private TimeCounter _timeCounter;
+    private float _moveSpeed = 10.0f;
+
+    private void Start()
+    {
+        // 타이머 구독
+        _timeCounter.OnTimeChanged
+            .Where(x => x == 0) // 타이머가 0이 되었을 때만 실행
+            .Subscribe(_ =>
+            {
+                // 타이머가 0이되면 초기 좌표로 돌린다
+                transform.position = Vector3.zero;
+            });
+    }
+
+    private void Update()
+    {
+        // 오른쪽 화살표를 누르고 있는 동안 이동
+        if (Input.GetKey(KeyCode.RightArrow))
+        {
+            transform.position += new Vector3(1, 0, 0) * _moveSpeed * Time.deltaTime;
+        }
+
+        // 화면 밖으로 나오면 제거
+        if (transform.position.x > 10)
+        {
+            Debug.Log("화면 밖에 나왔다!");
+            Destroy(gameObject);
+        }
+    }
+}
+
+
+```
+
+#### 실행 결과 1 / 타이머 0에서 플레이어가 생존 한 경우
+
+![UniRx 예시 -1-](https://user-images.githubusercontent.com/85855054/125230709-53d12a80-e314-11eb-892e-95c92479bc04.gif)
+
+타이머가 0이 되었을 때 플레이어의 좌표가 제대로 초기 위치로 이동하게 됩니다.
+
+이와 같이 플레이어가 생존한 경우는 이 코드가 제대로 실행됩니다.
+
+#### 실행 결과 2 / 타이머 0에서 플레이어가 제거 된 경우
+
+![UniRx 예시 -2-](https://user-images.githubusercontent.com/85855054/125230713-559aee00-e314-11eb-9513-2558cfc11453.gif)
+
+타이머 0의 시점에서 플레이어가 제거 된 경우 이 코드에서는 MissingReferenceException 예외가 발생하고 있습니다.
+
+즉, 이 코드는 타이머 0 시점에서 플레이어가 소멸한 경우 이상이 있다는 것을 알 수 있다.
+
+#### 실행 결과 2의 오류 원인
+
+```C#
+    private void Start()
+    {
+        // 타이머 구독
+        _timeCounter.OnTimeChanged
+            .Where(x => x == 0) // 타이머가 0이 되었을 때만 실행
+            .Subscribe(_ =>
+            {
+                // 타이머가 0이되면 초기 좌표로 돌린다
+                transform.position = Vector3.zero;
+            });
+    }
+
+```
+
+원인은 playerMover에 있다.
+
+스트림의 실체는 Subject가 보관하고 있는데 PlayerMover가 삭제 된다해도 TimeCounter.timer.Subject가 여전히 삭제된 값인 transform.position에 접근하여 Vector3.zero값을 넣고 있기 때문입니다.
+
+![UniRx 예시 -4-](https://user-images.githubusercontent.com/85855054/125231179-3cdf0800-e315-11eb-845b-5fe9773fb79c.jpeg)
+
+이와 같이 스트림의 수명과 객체의 수명이 일치하지 않는 경우 ( 객체는 제거되었으나 여전히 그 객체를 참조하는 스트림이 있을때 ) 에러의 원이이 된다.
+
+#### 대책
+
+대책은 단순히 Player의 GameObject가 파괴되면 스트림의 구독을 중지하면 된다.
+
+구현 방법에는 여러 가지가 있지만, 그중 AddTo의 사용예제가 있다.
+
+```C#
+private void Start()
+{
+    // 타이머 구독
+    _timeCounter.OnTimeChanged
+        .Where(x => x == 0) // 타이머가 0이 되었을 때만 실행
+        .Subscribe(_ =>
+        {
+            // 타이머가 0이되면 초기 좌표로 돌린다
+            transform.position = Vector3.zero;
+        }).AddTo(gameObject); // 지정된 gameObject가 파기되면 Dispose 한다.
+}
+```
+
+UniRx에는 AddTo 라는 메서드가 준비되어 있으며, Subscribe 뒤에 AddTo(gameObject)라고 적음으로써 지정된 GameObject가 Destroy되면 자동으로 Dispose를 호출하도록 설정할 수 있다.
+
+![UniRx 예시 -3-](https://user-images.githubusercontent.com/85855054/125230714-559aee00-e314-11eb-8e3d-4cb36f734e8a.gif)
+
+# 정리
+
+**메시지의 종류는 3가지가 있다.**
+
+-   OnNext: 보통 이벤트가 발생했을때 알림 메시지
+-   OnError: 스트림을 처리하는 동안 예외가 발생한 경우 통지하는 메시지.
+-   OnCompleted: 스트림이 종료되었음을 알리는 메시지
+
+**스트림의 구독을 중단하는 패턴은 3가지가 있다.**
+
+-   Subscribe 가 OnCompleted를 감지
+-   Subscribe 가 OnError를 감지
+-   Subscribe 가 반환한 IDisposable의 Dispose()를 호출
+
+**스트림의 수명과 객체의 수명 관계는 항상 의식할 필요가 있다.**
+
+-   객체를 지웠지만, 스트림은 살아 남은 상태는 절대적으로 피해야 한다.
+-   스트림을 사용한 후에 Dispose를 호출하거나 OnCompleted를 발행하는 버릇을 붙이자.
