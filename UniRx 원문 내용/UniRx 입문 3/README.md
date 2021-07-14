@@ -231,3 +231,235 @@ Observable.Timer(TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(1))
 
 Timer, TimerFrame을 정기적으로 실행을 하고자 할때는 Dispose의 작동을 기억해야한다.  
 멈추는 것을 잊지 않고 방치하면 메모리 누수와 NullReferenceException의 원인이 된다.
+
+## UniRx.Triggers
+
+UniRx.Triggers는 using UniRx.Triggers; 를 사용하는 스트림 소스다.  
+Unity에서 제공하는 콜백 이벤트를 UniRx의 IObservable로 변환하여 제공한다.
+
+[UniRx.Triggers-github](https://github.com/neuecc/UniRx/wiki/UniRx.Triggers)를 참고하자.
+
+Unity가 제공하는 대부분의 콜백 이벤트를 스트림으로써 취득 가능하게 되어 있으며 GameObject가 Destroy 될때 자동으로 OnCompleted를 발급 해주는 구조로 되어있다.
+
+```C#
+using UniRx;
+using UnityEngine;
+using UniRx.Triggers; // 필수 추가
+
+// <summary>
+// WarpZone (라는 이름의 IsTrigger인 Collider가 붙은 영역)에
+// 들어왔을때 부유하는 스크림트 (임의)
+// </summary>
+public class TriggersSample : MonoBehaviour
+{
+    private void Start()
+    {
+        bool isForceEnabled = true;
+        var rb = GetComponent<Rigidbody>();
+
+                // 플래그가 유요한 동안 위쪽에 힘을 가한다.
+        this.FixedUpdateAsObservable()
+            .Where(_ => isForceEnabled)
+            .Subscribe(_ => rb.AddForce(Vector3.up * 20));
+
+                // WarpZone에 침입하면 플래그를 활성화 한다.
+        this.OnTriggerEnterAsObservable()
+            .Where(x => x.gameObject.CompareTag("WarpZone"))
+            .Subscribe(_ => isForceEnabled = true);
+
+                // WarpZone에 나오면 플래그를 해제 한다.
+        this.OnTriggerExitAsObservable()
+            .Where(x => x.gameObject.CompareTag("WarpZone"))
+            .Subscribe(_ => isForceEnabled = false);
+    }
+}
+```
+
+Triggers를 사용하여 Unity 콜백을 스트림으로 변환하면 모든 것을 Awake/Start에 작성할 수 있다.
+
+## 코루틴에서 변환
+
+코루틴에서 IObservable의 변환은 Observable.FromCoroutine을 이용하여 수행 할 수 있다.  
+오퍼레이터 체인으로 복잡한 스트림을 구축하는 것보다 코루틴을 사용해 절차적으로 쓰는 경우가 더 심플하고 알기 쉬운 경우도 존재한다.
+
+```C#
+using System;
+using System.Collections;
+using UniRx;
+using UnityEngine;
+
+public class Example23_Timer : MonoBehaviour
+{
+    // <summary>
+    // 일시 정지 플래그
+    // </summary>
+    public bool IsPaused { get; private set; }
+
+    private void Start()
+    {
+        // 60초 카운트하는 스트림을 코루틴에서 만든다.
+        Observable.FromCoroutine<int>(observer => TimerCoroutine(observer, 60))
+            .Subscribe(t => Debug.Log(끝));
+    }
+
+    // <summary>
+    // 초기 값에서 0까지 카운트하는 코루틴
+    // 그러나 IsPaused 플래그가 유요한 경우는 카운트 중지
+    // </summary>
+    IEnumerator TimerCoroutine(IObserver<int> observer, int initializeTime)
+    {
+        var current = initializeTime;
+        while (current > 0)
+        {
+            if (!IsPaused)
+            {
+                observer.OnNext(current--);
+            }
+            yield return new WaitForSeconds(1);
+        }
+                observer.OnNext(0);
+        observer.OnCompleted();
+    }
+}
+
+```
+
+## UGUI 이벤트에서 변환
+
+UniRx는 uGUI와 같이 사용하기 쉽다, ReactiveProperty와 결합하여 View와 Model의 관계를 굉장히 명확하게 구현할 수 있다. ( 이는 MVP패턴이라고 불린다. )
+
+```C#
+using UniRx;
+using UnityEngine;
+using UnityEngine.UI;
+
+public class Example23_uGUI : MonoBehaviour
+{
+    // 인스펙터에서 설정
+    [SerializeField] private Button button;
+    [SerializeField] private InputField inputField;
+    [SerializeField] private Slider slider;
+
+    private void Start()
+    {
+        // uGUI의 기본 Unity 이벤트의 이름을 한 Observable이 준비되어 있다.
+        button.OnClickAsObservable().Subscribe(_ =>
+        {
+            Debug.Log("button OnClick!");
+        });
+
+        inputField.OnValueChangedAsObservable().Subscribe(str =>
+        {
+            Debug.Log("inputField OnValueChanged : " + str);
+        });
+        inputField.OnEndEditAsObservable().Subscribe(str =>
+        {
+            Debug.Log("inputField OnEndEdit : " + str);
+        });
+
+        slider.OnValueChangedAsObservable().Subscribe(val =>
+        {
+            Debug.Log("slider value changed : " + val);
+        });
+
+        // ----------
+
+        // 또한 이러한 방법도 있다.
+        inputField.onValueChanged.AsObservable().Subscribe();
+
+        // 이 두 기법의 차이는 Subscribe시 현재 값의 초기 값의 발행 여부이다
+        // Subscribe시 초기 값이 필요한 경우는 전자를 사용하면 된다.
+        inputField.OnValueChangedAsObservable(); // 초기값이 있다.
+        inputField.onValueChanged.AsObservable(); // 초기값이 없다.
+    }
+}
+
+```
+
+## 기타
+
+UniRx는 이외에도 편리한 스트림 소스를 제공해주고 있다.
+
+### ObservableWWW
+
+ObservableWWW는 Unity의 WWW를 스트림으로 처리 할 수 있도록 래핑 해 준 것이다. 호출하는 것으로 UniRx는 코루틴을 실행해 WWW를 처리하고 결과만 알려준다
+
+```C#
+ObservableWWW.Get("https://google.com")
+             .Subscribe(x => Debug.Log(x));
+```
+
+> UniRx는 내부에 코루틴을 가지고 있다. 그 실체가 되는 GameObject는 MainThreadDispacher라는 이름으로 씬에 존재한다.  
+> 이 MainTreadDispatcher를 멈추면 UniRx가 올바르게 동작하지 않게 되므로 이 GameObject를 손보는 것은 피해야 한다.
+
+> Unity 2018.3 이상 버전부터는 ObservableWWW의 사용을 권장하지 않는다. 그 대신에 유니티에 새로 추가된 UnityWebRequest를 권장한다.  
+> 실제 편안한 사용을 위해서는 UniTask 라이브러리와 같이 사용해 C# 의 Task 처럼 사용을 하거나 Task를 Observable로 변환하여 사용하면 될 것으로 보인다.
+
+### Observable.NextFrame
+
+다음 프레임으로 메시지를 발행 해주는 스트림을 만들 수 있다. **메시지의 발행 타이밍은 Update 타이밍이 아닌 코루틴 타이밍 이므로** 실행 타이밍이 매우 중요한 경우에는 주의해서 사용해야 한다.
+
+> [Unity 이벤트 함수의 실행 순서 ](https://docs.unity3d.com/kr/current/Manual/ExecutionOrder.html)를 참고하자.
+
+```C#
+Observable.NextFrame()
+        .Subscribe(_ => Debug.Log("다음 프레임에서 실행됩니다."));
+```
+
+업데이트 타이밍은 다음 3가지로 조절 가능하며, 기본 값은 Update이다.
+
+-   Update (yield return null)
+-   FixedUpdate (yield return new WaitForFixedUpdate())
+-   EndOfFrame (yield return new WaitForEndOfFrame())
+
+### Observable.EveryUpdate
+
+Observable.EveryUpdate는 매 Update 타이밍을 알려주는 스트림 소스이다.  
+ UniRx.Triggers의 UpdateAsObservable과 비슷하지만 이쪽은 GameObject에 붙어 Destroy시 OnCompleted가 실행되는 반면,  
+ Observable.EveryUpdate는 스스로 중지하지 않는 한 씬을 거쳐도 계속 움직이는 스트림이다.
+
+FPS 카운터와 같은 어떤 신에서도 계속 같은 스트림을 구축해야 할때 유용하다.
+
+참고: [UniRx에서 FPS 카운터를 만들어 보기](https://tech.lonpeach.com/2019/10/23/UniRx-FPS-Counter/)
+
+### ObservableEveryValueChanged
+
+ObservableEveryValueChanged는 모든 객체의 파라미터를 매 프레임 모니터링하고 변화가 있었을 때에 통지하는 스트림을 생성 할 수 있다.
+
+```C#
+var characterController = GetComponent<CharacterController>();
+
+// CharacterController의 isGrounded를 감시
+// false -> true가 되면 로그 출력
+characterController
+    .ObserveEveryValueChanged(c => c.isGrounded)
+    .Where(x => x)
+    .Subscribe(_ => Debug.Log("착지!"))
+    .AddTo(gameObject);
+
+// ↑ 코드는 ↓와 거의 동의어
+Observable.EveryUpdate()
+    .Select(_ => characterController.isGrounded)
+    .DistinctUntilChanged()
+    .Where(x => x)
+    .Subscribe(_ => Debug.Log("착지!"))
+    .AddTo(gameObject);
+
+// ObserveEveryValueChanged는
+// EveryUpdate + Select + DistinctUntilChanged
+// 의 축약 버전에 속한다.
+```
+
+# 정리
+
+스트림 소스를 만드는 방법은 여러가지 있다.
+
+1. Subject
+2. ReactiveProperty
+3. 팩토리 메서드
+4. UniRx.Triggers
+5. 코루틴을 변환하여 사용
+6. UGUI 이벤트를 변환하여 사용
+7. 기타 UniRx에 준비되어 있는 것을 사용
+
+> Unity에서는 주로 Subject, UniRx.Triggers , ReactiveProperty, uGUI변환을 사용한다.
