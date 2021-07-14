@@ -3,15 +3,15 @@
 ## Reactive Extensions (이하 Rx)는 요점만 말하면 다음과 같은 라이브러리 입니다.
 
 MiscrosoftResearch가 개발하고 있던 C#용 비동기 처리를 위한 라이브러리
-디자인 패턴 중 하나인 Observer 패턴을 기반으로 설계되어 있다.
-시간에 관련된 처리 및 실행 타이밍이 중요한 곳에서 처리를 쉽게 작성할 수 있도록 되어 있다.
-완성도가 높고 Java, JavaScript, Swift 등 다양한 언어로 포팅되어 있다.
+디자인 패턴 중 하나인 Observer 패턴을 기반으로 설계되어 있다.  
+시간에 관련된 처리 및 실행 타이밍이 중요한 곳에서 처리를 쉽게 작성할 수 있도록 되어 있다.  
+완성도가 높고 Java, JavaScript, Swift 등 다양한 언어로 포팅되어 있다.  
 UniRx는 Rx를 기반으로 Unity에 이식된 라이브러리이며, 본가 .NET Rx에 비해 다음과 같은 차이가 있습니다.
 
 ## Unity C#에 최적화되어 만들어져있다.
 
-Unity 개발에 유용한 기능이나 오퍼레이터가 추가적으로 구현되어 있다.
-ReactiveProperty 등이 추가되어 있다.
+Unity 개발에 유용한 기능이나 오퍼레이터가 추가적으로 구현되어 있다.  
+ReactiveProperty 등이 추가되어 있다.  
 철저하게 성능 튜닝이 진행되어, 원래 .NET Rx보다 메모리 퍼포먼스가 더 좋다.
 
 # event와 UniRx
@@ -221,11 +221,10 @@ namespace UniRx
 
 ```
 
-IObserver는 보시는 것 처럼, “OnNext”, “OnError”, “OnCompleted”의 3개의 메서드 정의만 있는 굉장히 간단한 인터페이스로 되어 있습니다. 방금 전까지 이용했던 OnNext 메서드는 사실 이 IObserver에 정의된 메서드였습니다.
+IObserver는 보시는 것 처럼, “OnNext”, “OnError”, “OnCompleted”의 3개의 메서드 정의만 있는 굉장히 간단한 인터페이스로 되어 있다.  
+방금 전까지 이용했던 OnNext 메서드는 사실 이 IObserver에 정의된 메서드다.
 
-OnError은 “발생한 오류(Exception)을 알리는 메시지를 발행하는 메서드”이며, OnCompleted는 “메시지의 발행이 완료되었음을 알리는 메서드” 입니다.
-
-OnError, OnCompleted의 설명은 차후에 하겠습니다. 이번에는 우선 “OnNext”, “OnError”, “OnCompleted”의 3가지 메서드(메시지)가 준비되어 있다 라는 정도만 기억 하면 될 것 같습니다.
+OnError은 “발생한 오류(Exception)을 알리는 메시지를 발행하는 메서드”이며, OnCompleted는 “메시지의 발행이 완료되었음을 알리는 메서드” 이다.
 
 ### IObservable 인터페이스
 
@@ -249,7 +248,7 @@ namespace UniRx
 subject.Subscribe(msg => Debug.Log("Subscribe1:" +msg ));
 ```
 
-분명 위 인터페이스 IObservable의 Subscribe 메소드에서는 인수로 IObserver를 받고 있는데, 지금은 무명 메서드를 받고있다.
+분명 위 인터페이스 IObservable의 Subscribe 메소드에서는 인수로 IObserver를 받고 있는데, 지금은 무명 메서드를 받고있다.  
 UniRx에서는 OnNext, OnError, OnCompleted의 3개이 메시지 중에 필요한 메시지만을 이용할 수 있는 Subscribe의 생략 호출용 메서드가 IObservable에 준비되어 있다.
 
 실제로 UniRx를 이용할 때는 이 생략 호출을 사용하는 경우가 대부분이며, Subscribe(IObserver\<T> observer) 호출은 거의 없다.
