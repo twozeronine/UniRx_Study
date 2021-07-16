@@ -1,0 +1,238 @@
+# UniRx 입문 5부 - 코루틴과 함께
+
+# 코루틴과 UniRx
+
+Unity는 기본적으로 "코루틴"이라는 기능이 포함되어 있다.  
+이것은 본래는 C#에서의 이터레이터 처리를 구현하는데 사용하는 IEnumerator와 yield 키워드를 활용하여 Unity의 주 스레드에서 비동기 처리 같은 것을 실현하는 기능이다.
+
+> 코루틴에 실행되는 작업은 Unity의 메인 스레드에서 실행된다. Update()와 비슷한 처리로 실행 타이밍도 대부분 같다.
+
+그리고 UniRx는 선언적으로 기술한 스트림은 if 분기할 수 없거나, 스트림의 결과를 이용하여 그대로 절차적 처리에 연결하는 등의 처리가 어렵다.  
+하지만 코루틴과 UniRx를 병행함으로써 이러한 문제를 해결 할 수 있다.  
+또한 코루틴의 절차적 처리의 이점을 살리면서, UniRx의 유연한 예외 처리를 사용하는 것도 가능하다.
+
+용어 해설
+
+-   선언적 : 부작용이 없는 함수를 메소드 체인으로 연결해 일련의 동작을 설명하는 방식
+    -- 장점 : 필요한 처리를 차례로 연결해 쓰는 것만으로 구현되어 가독성이 높다.
+    -- 단점 : 필요한 작업이 너무 복잡하면 기존 함수만으로는 구현할 수 없는 경우가 있다.
+-   절차적 : 상태 변수나 for와 if문을 사용하여 동작을 전부 설명하는 방식
+    -- 장점 : 내 마음대로 사용할 수 있어, 어떤 처리도 가능하다.
+    -- 단점 : 복잡한 기술이 증가하고 가독성이 낮아진다.
+
+> 절차적 프로그래밍 : "루틴", "서브루틴", "메소드", "함수"등 "프로시저"를 이용한 프로그래밍 패러다임
+
+# 코루틴에서 IObservable로 변환
+
+코루틴을 스트림으로 변환하면 코루틴의 결과 그대로 UniRx 오퍼레이터 체인에 연결하여 주는 것이 가능하다.
+
+또한 복잡한 행동을 하는 스트림을 생성 할 때는 코루틴에서 구현하고 스트림으로 변환하는 방법을 취하는 것이 UniRx 오퍼레이터 체인만으로 스트림을 구축하는 것보다 간단하게 처리되는 경우도 있다.
+
+## 1. 코루틴 종료 시간을 스트림으로 기다린다.
+
+### Observable.FromCoroutine
+
+반환 타입 : IObservable\<Uint>
+
+첫 번째 인수 : Func\<IEnumerator> coroutine : 코루틴 본체
+
+두 번째 인수 : bool publishEveryYield = false : yield 한 시간에 OnNext를 발행 하는가 ?
+
+> (false는 OnComplete 직전에 1번만 발급 default = false )
+
+Observable.FromCoroutine을 이용하면 코루틴 종료 시간을 스트림으로 처리 할 수 있다.
+
+```C#
+using System.Collections;
+using UniRx;
+using UnityEngine;
+
+public class ConvertFromCoroutine : MonoBehaviour
+{
+    private void Start() =>
+        Observable.FromCoroutine(NantokaCoroutine, publishEveryYield: false)
+            .Subscribe(
+                _ => Debug.Log("OnNext"),
+                () => Debug.Log("OnCompleted")
+            ).AddTo(gameObject);
+
+    private IEnumerator NantokaCoroutine()
+    {
+        Debug.Log("Coroutine started");
+
+        // 어떤 처리를 하고 기다리고 있는 예
+        yield return new WaitForSeconds(3);
+
+        Debug.Log("Coroutine finished.");
+    }
+}
+
+/*실행 결과
+Coroutine started
+Coroutine finished
+OnNext
+OnComplted
+*/
+
+```
+
+Observable.FromCoroutine은 Subscribe 될 때마다 새롭게 코루틴을 생성하고 시작하게 된다는 것에 주의하자.
+코루틴 하나만 시작 스트림을 공유하여 이용하고 싶다면 스트림의 [Hot 변환](https://qiita.com/toRisouP/items/f6088963037bfda658d3)이 필요하다.
+
+덧붙여 Observable.FromCoroutine 에서 시작한 코루틴은 Subscribe를 Dispose하면 자동으로 중지 된다.
+
+만약 코루틴에서 자신의 스트림이 Dispose 된 것을 감지하려면 코루틴의 인수 CancellationToken을 전달하여 Dispose를 감지 할 수 있다.
+이때 CancellationToken은 Observable.FromCoroutine에서 얻을 수 있다.
+
+```C#
+Observable.FromCoroutine(token => NantokaCoroutine(token)) // token이 CancellationToken
+```
+
+## 2. 코루틴의 yield return 결과를 추출
+
+### Observable.FromCoroutineValue
+
+반환 타입 : IObservable\<T>
+
+첫 번째 인수 : Func\<IEnumerator> coroutine : 코루틴 본체
+
+두 번째 인수 : bool nullAsNextUpddate = true : null일 때 OnNext를 발행하지 않는다. default = true
+
+Observable.FromCoroutineValue\<T>를 이용하면 코루틴의 yield return으로 반환 된 값을 꺼내 스트림으로 사용할 수 있다.
+
+yield return은 호출 될 때마다 1 프레임 정지하는 성질이 있기 때문에 이를 이용하여 한 프레임 씩 값을 발행 할 수 있다.
+
+```C#
+using System.Collections;
+using System.Collections.Generic;
+using UniRx;
+using UnityEngine;
+
+public class ConvertFromCoroutine2 : MonoBehaviour
+{
+    // 이동 좌표 목록
+    [SerializeField] private List<Vector2> moveList;
+
+    private void Start() =>
+        Observable.FromCoroutineValue<Vector2>(MovePositionCoroutine)
+            .Subscribe(x => Debug.Log(x));
+
+    /// <summary>
+    /// 목록에서 값을 1 프레임씩 꺼내는 코루틴
+    /// </summary>
+    /// <returns></returns>
+    private IEnumerator MovePositionCoroutine()
+    {
+        foreach (var v in moveList)
+        {
+            yield return v;
+        }
+
+        // ↑의 foreach 문은 통째로
+        // "return moveList.GetEnumerator ();"
+        // 로 고쳐 써도 된다.
+    }
+}
+```
+
+실행 결과
+![2020-02-26-1](https://user-images.githubusercontent.com/85855054/125875205-1b0b95e4-e46c-44de-89cd-8432c8e955d8.png)
+
+## 3. 코루틴 내부에서 OnNext를 직접 발행하기
+
+### Observable.FromCoroutine
+
+반환 타입 : IObservable\<T>
+
+첫 번째 인수 : Func\<IObserver<T>, IEnumerator> coroutine IObserver를 인수로 취하는 코루틴
+
+Observable.FromCoroutine\<T>은 IObserver\<T>를 제공하는 구현도 존재한다. 이 IObserver를 코루틴에 전달하여 코루틴의 특정 타이밍에 OnNext를 발행 할 수있다.
+
+이 기능을 이용하면 내부 구현은 절차적 비동기 처리로 쓰고 외부에서는 스트림으로 취급하는 것 처럼 코루틴과 UniRx 모두 장점을 취할 수 있다.
+
+또한 OnCompleted는 자동으로 발급되지 않기 때문에, 코루틴 종료 시점에서 스스로 OnCompleted를 발급해 줄 필요가 있습니다.
+
+```C#
+using System;
+using System.Collections;
+using UniRx;
+using UnityEngine;
+
+public class ConvertFromCoroutine3 : MonoBehaviour
+{
+    // 일시 정지 플래그, true인 경우 타이머 중지
+    public bool IsPaused;
+
+    private void Start() =>
+        Observable.FromCoroutine<long>(observer => CountCoroutine(observer))
+            .Subscribe(x => Debug.Log(x))
+            .AddTo(gameObject);
+
+    /// <summary>
+    /// 일시 정지 플래그가 지나지 않은 상태의 시간(초)를 계산하여 알려준다.
+    /// </summary>
+    /// <param name="observer">알림 IObserver</param>
+    /// <returns></returns>
+    IEnumerator CountCoroutine(IObserver<long> observer)
+    {
+        long current = 0;
+        float deltaTime = 0;
+
+        // Dispose하면 코루틴이 멈추니까 while(true) 해도 문제없이 움직인다.
+        // 기분 나쁘다면 CancellationToken을 받아 이용하면 된다.
+        while (true)
+        {
+            if (!IsPaused)
+            {
+                // 일시 플래그가 지나지 않은 사이 시간을 측정한다.
+                deltaTime += Time.deltaTime;
+                if (deltaTime >= 1.0f)
+                {
+                    // 차이가 1초를 초과한 경우 정수 부분을 꺼내 집계 통지한다.
+                    var integerPart = (int) Mathf.Floor(deltaTime);
+                    current += integerPart;
+                    deltaTime -= integerPart;
+
+                    // 시간(초) 통지
+                    observer.OnNext(current);
+                }
+            }
+            yield return null;
+        }
+    }
+}
+
+```
+
+실행 결과
+
+![코루틴움짤](https://user-images.githubusercontent.com/85855054/125876080-0a84916b-0c0f-4d49-95e4-6dd1f14fa863.gif)
+
+> 일시 정지 플래그가 true 동안 카운트를 정지 해, false가 되면 중단된 이전의 카운트에서 측정을 재개한다.
+
+"상태에 의존한 처리"나 "중간에 처리가 크게 분기되는 처리" 같은 것은 UniRx오퍼레이터 체인만으로 구현하기 어렵고, 경우에 따라서는 구현 불가능한 경우도 있습니다.  
+그런 경우 이렇게 코루틴에서 내부 구현을 실시하고 스트림으로 변환 해버리는 방법을 권장합니다.
+
+## 4. 보다 저렴한 비용으로 가벼운 코루틴을 실행
+
+### Observable.FromMicroCoroutine
+
+반환 타입 : IObservable\<Unit> / IOservable\<T>
+
+첫 번째 인수 : Func\<IEnumerator> coroutine / Func\<IObserver<T>, IEnumerator> coroutine
+
+인수 : frameCountType frameCountType = frameCountType.Update : Update, FixedUpdate, EndOfFrame 어느 타이밍을 이용할것인지
+
+이전에 설명하였던 Observable.FromCoroutine / Observable.FromCoroutine\<T>과 거의 같은 동작을 한다.
+
+그러나 내부 구현은 크게 다르며, 코루틴에서 yield return null만 사용할 수 있는 제약이 있는 대신 Unity 표준 코루틴에 비해 매우 고속으로 동작하는 구조로 되어있다.  
+이 구조의 코루틴을 "마이크로 코루틴"이라 부르며 UniRx 독자 구현으로 되어 있다.
+
+yield return null 만 구현되어 있는 코루틴을 만들고 시작하려면 Unity 표준의 StartCoroutine 보다 이 Observable.FromMicroCoroutine를 사용하면 보다 더 저렴한 비용으로 코루틴을 사용할 수 있다.
+
+```C#
+private void Start() =>
+                Observable.FromMicroCoroutine<long>(observer => CountCoroutine(observer))
+            .Subscribe(x => Debug.Log(x))
+            .AddTo(gameObject);
+```
