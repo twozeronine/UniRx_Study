@@ -108,7 +108,7 @@ using System.Collections.Generic;
 using UniRx;
 using UnityEngine;
 
-public class ConvertFromCoroutine2 : MonoBehaviour
+public class ConvertFromCoroutine2 : MonoBehaviourㄱ
 {
     // 이동 좌표 목록
     [SerializeField] private List<Vector2> moveList;
@@ -236,3 +236,328 @@ private void Start() =>
             .Subscribe(x => Debug.Log(x))
             .AddTo(gameObject);
 ```
+
+## 코루틴에서 IObservable로 변환하는 방법 정리
+
+-   코루틴에서 IObservable로 변환 할 수 있다.
+-   Observable.FromCoroutine 등으로 실행한 코루틴은 MainThreadDispatcher에 관리가 위임되므로 수명 관리에 주의 할 필요가 있다 (AddTo 사용 )
+-   Observable.FromCoroutine 등은 Subscribe 된 시점에서 새롭게 코루틴을 생성하고 시작되어 버리기 때문에, 1개의 코루틴을 공유하고 여러 번 Subscribe 할 때는 Hot 변환이 필요하다.
+
+# IObservable에서 코루틴으로 변환
+
+두 번째 방법으로 UniRx 스트림을 코루틴으로 변환하는 방법이 있다.
+
+이 스트림을 코루틴으로 변환하는 기술을 이용하여 코루틴에서 스트림의 실행 결과를 기다리고 그대로 계속 진행하는 등의 기술 방법이 가능하다.
+
+C# Task와 Await에 해당한다라고 생각하면된다.
+
+## 스트림을 코루틴으로 변환 ( Unity 5.3 )
+
+### ToYieldInstruction
+
+반환 타입 : ObservableYieldInstruction\<T>
+
+인수 : CacellationToken cancel 처리를 중단한 경우는 인수에 전달 한다 ( 생략 가능 )
+
+인수 : bool throwOnError = false OnError가 발상했을 때 예외 내용을 throw 할 것인가?
+
+ToYieldInstruction를 이용하여 스트림을 코루틴으로 실행 한 다음 스트림을 기다리게 할 수 있다.
+
+```C#
+using System;
+using System.Collections;
+using UniRx;
+using UniRx.Triggers;
+using UnityEngine;
+
+public class ConvertToCoroutine : MonoBehaviour
+{
+    private void Start()
+    {
+        StartCoroutine(WaitCoroutine());
+    }
+
+    private IEnumerator WaitCoroutine()
+    {
+        // Subscribe 대신 ToYieldInstruction()을 이용하여
+        // 코루틴으로 스트림을 처리 할 수 있게 된다
+
+        // 1초 기다린다
+        Debug.Log("Wait for 1 second.");
+        yield return Observable.Timer(TimeSpan.FromSeconds(1)).ToYieldInstruction();
+
+        // ToYieldInstruction()은 OnCompleted가 발행되어 코루틴 종료
+        // 따라서 OnCompleted가 반드시 발행되는 스트림에서만 사용할 수 있다.
+        // 무한으로 이어지는 스트림의 경우 First나 FirstOrDefault를 사용하면 좋겠다.
+        Debug.Log("Press any key");
+
+        // 아무 키나 누를 때까지 기다린다
+        yield return this.UpdateAsObservable()
+            .FirstOrDefault(_ => Input.anyKeyDown)
+            .ToYieldInstruction();
+
+        // FirstOrDefault 조건을 충족하면 OnNext와 OnCompleted를 모두 발행한다.
+        Debug.Log("Pressed");
+    }
+}
+
+
+```
+
+ToYieldInstruction은 OnCompleted 메시지를 받으면 yield return을 종료한다.  
+따라서 OnCompleted를 발행하지 않는 끝없는 스트림을 ToYieldInstruction 해 버리면 영원히 끝없는 상태가 되어버린다.
+
+또한 스트림에서 발행된 OnNext 메시지를 이용하는 경우 ToYieldInstruction이 반환하는 ObservableYieldInstruction\<T>로 변수에 저장한 결과를 가져올 수 있다.
+
+```C#
+using System;
+using System.Collections;
+using UniRx;
+using UniRx.Triggers;
+using UnityEngine;
+
+public class ConvertToCoroutine2 : MonoBehaviour
+{
+    private void Start() => StartCoroutine(DetectCoroutine());
+
+    private IEnumerator DetectCoroutine()
+    {
+        Debug.Log("Coroutine start!");
+
+        // 코루틴이 시작되고 나서
+        // 3초 이내에 먼저 자신을 건드린 객체를 얻는다.
+        var o = this.OnCollisionEnterAsObservable()
+            .FirstOrDefault()
+            .Select(x => x.gameObject)
+            .Timeout(TimeSpan.FromSeconds(3))
+            .ToYieldInstruction(throwOnError: false);
+
+        // Timeout은 지정 시간 이내에 스트림이 완료되지 않는 경우
+        // OnError를 발행하는 오퍼레이터
+
+        // 결과를 기다린다.
+        yield return o;
+
+        if (o.HasError || !o.HasResult)
+        {
+            // 아무것도 치지 않았다.
+            Debug.Log("hit object is nothing.");
+        }
+        else
+        {
+            // 뭔가에 맞았다.
+            var hitObject = o.Result;
+            Debug.Log(hitObject.name);
+        }
+    }
+}
+
+
+```
+
+![코루틴 충돌 움짤](https://user-images.githubusercontent.com/85855054/126246914-0c734eac-4749-4b57-9825-d526875158ce.gif)
+![코루틴 충돌 움짤 2](https://user-images.githubusercontent.com/85855054/126246910-61853895-15ad-4182-8adc-e314824d933e.gif)
+
+---
+
+## 스트림을 코루틴으로 변환 (Unity 5.2 이전 )
+
+Unity 5.2 이전에는 ToYieldInstruction을 사용할 수 없었다. 대신 StartAscoroutine을 사용하여 동일한 작업을 수행 할 수 있다.
+
+```C#
+IEnumerator DetectCoroutine()
+{
+    GameObject result = null;
+    bool isTimeout = false;
+
+        // 코루틴이 시작되고 나서
+    // 3초 이내에 먼저 자신에 닿은 오브젝트를 취득하는
+    yield return this.OnCollisionEnterAsObservable()
+        .FirstOrDefault()
+        .Select(x => x.gameObject)
+        .Timeout(TimeSpan.FromSeconds(3))
+        .StartAsCoroutine(x => result = x, error => isTimeout = true);
+
+        // StartAsCoroutine는 첫 번째 인수의 함수 결과가 전달되기 때문에
+    // 그래서 사전에 정의 된 변수에 결과를 대입하여 결과를 얻을 수
+    // 두 번째 인수는 OnError
+    if (isTimeout || result == null)
+    {
+        Debug.Log("hit object is nothing.");
+    }
+    else
+    {
+        var hitObject = result;
+        Debug.Log(hitObject.name);
+    }
+}
+
+
+```
+
+## IObservable에서 코루틴으로 변환하는 방법 정리
+
+-   ToYieldInstruction 또는 StartAsCoroutine을 이용하여 스트림을 코루틴으로 변환 할 수 있다.
+-   응용하면 "코루틴 도중 특정 이벤트의 발행을 기다린다" 같은 처리가 가능하게 된다.
+
+# 응용 예시
+
+## 코루틴을 직렬로 실행하고 기다린다
+
+CoroutineA 실행 -> CoroutineA의 종료를 받고 CoroutineB 시작
+
+```C#
+private void Start() =>
+    Observable.FromCoroutine(CoroutineA)
+        .SelectMany(CoroutineB) // SelectMany에서 합성
+        .Subscribe(_ => Debug.Log("All Coroutine Finished"));
+
+private IEnumerator CoroutineA()
+{
+    Debug.Log("CoroutineA start");
+    yield return new WaitForSeconds(3);
+    Debug.Log("CoroutineA finished");
+}
+
+private IEnumerator CoroutineB()
+{
+    Debug.Log("CoroutineB start");
+    yield return new WaitForSeconds(3);
+    Debug.Log("CoroutineB finished");
+}
+
+/* 실행 결과
+CoroutineA start
+CoroutineA finished
+CoroutineB start
+CoroutineB finished
+All coroutine finished
+*/
+```
+
+## 여러 코루틴을 동시에 시작하고 결과를 기다린다.
+
+CoroutineA와 CoroutineB를 동시에 시작하고 모두 종료하고 정리해 처리
+
+```C#
+
+    private void Start() =>
+        Observable.WhenAll(
+            Observable.FromCoroutine<string>(o => CoroutineA(o))
+            , Observable.FromCoroutine<string>(o => CoroutineB(o))
+        ).Subscribe(xs =>
+        {
+            foreach (var x in xs)
+            {
+                Debug.Log("result: " + x);
+            }
+        });
+
+    private IEnumerator CoroutineA(IObserver<string> observer)
+    {
+        Debug.Log("CoroutineA start");
+        yield return new WaitForSeconds(3);
+        observer.OnNext("CoroutineA done!");
+        observer.OnCompleted();
+    }
+
+    private IEnumerator CoroutineB(IObserver<string> observer)
+    {
+        Debug.Log("CoroutineB start");
+        yield return new WaitForSeconds(1);
+        observer.OnNext("CoroutineB done!");
+        observer.OnCompleted();
+    }
+
+    /*실행결과
+    CoroutineB start
+    CoroutineA start
+    result : CoroutineA done!
+    result : CoroutineB done!
+    */
+```
+
+## 무거운 처리를 다른 스레드에 하면서 결과를 코루틴에서 얻는다.
+
+코루틴에서 일부 처리를 다른 스레드에서 실행하고 결과가 돌아 오면 처리를 코루틴에서 재개하도록 구현.
+
+Observable.Start()을 이용한다.
+
+```C#
+private void Start() => StartCoroutine(GetEnemyDataFromServerCoroutine());
+
+/// <summary>
+/// 서버에서 적의 정보를 당겨오는 코루틴
+/// </summary>
+/// <returns></returns>
+private IEnumerator GetEnemyDataFromServerCoroutine()
+{
+    // 서버에서 xml 다운로드
+    var www = new WWW ("http://api.hogehoge.com/resouces/enemey.xml");
+
+    yield return www;
+
+    if (!string.IsNullOrEmpty(www.error))
+    {
+        Debug.Log(www.error);
+    }
+
+    var xmlText = www.text;
+
+    // ParseXml 함수를 다른 스레드에서 실행
+    // Observable.Start는 인수의 함수를 ThreadPool에서 실행하는 기능
+    var o = Observable.Start(() => ParseXml(xmlText)).ToYieldInstruction();
+
+    // 파스 종료 대기
+    yield return o;
+
+    if (o.HasError)
+    {
+        // 파스 실패
+        Debug.LogError(o.Error);
+        yield break;
+    }
+
+    // 파스 결과
+    var result = o.Result;
+    Debug.Log(result);
+
+    // 이 후 처리 계속
+}
+
+private Dictionary<string, EnemyParameter> ParseXml(string xml)
+{
+    // 여기에 xml 파싱을 Dictinonary에 넣는다는 가정
+    return new Dictionary<string, EnemyParameter>();
+}
+
+/// <summary>
+/// 적 매개 변수
+/// </summary>
+private struct EnemyParameter
+{
+    public string Name { get; set; }
+    public string Health { get; set; }
+    public string Power { get; set; }
+}
+
+// 위에는 구현 예시이고 실제론 이렇게 쓴다.
+
+ObservableWWW.Get("http://api.hogehoge.com/resouces/enemey.xml")
+    .SelectMany(x => Observable.Start(() => ParseXml(x)))
+    .ObserveOnMainThread()  // 처리를 메인 스레드 취소
+    .Subscribe(result =>
+    {
+        // 여기에 퍼스 결과를 사용한 처리
+    }
+    ex => Debug.LogError(ex)
+);
+
+```
+
+# 정리
+
+-   스트림과 코루틴은 상호 변환 할 수 있다.
+-   코루틴을 이용하여 오퍼레이터 체인으로는 만들 수 없는 스트림을 구축하는 것이 가능하게 된다.
+-   UniRx의 독자 코루틴을 사용하는 것으로, Unity 표준 코루틴보다 사용이나 성능이 향상 될 수있다.
+-   스트림을 코루틴으로 변환하여 async/await 같은 기능이 가능하다 ( 어디 까지나 유사하게만 )
