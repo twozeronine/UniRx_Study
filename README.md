@@ -14,6 +14,7 @@ Rx는 하나의 프로그래밍 방법론이고 어떤 언어라도 Rx의 개념
 
 ## 참고 사이트
 
+-   [UniRx 일본 기사 내용](https://qiita.com/toRisouP/items/48b9fa25df64d3c6a392)
 -   [ReactiveX 공식 사이트](http://reactivex.io/)
 -   [UniRx 공식 깃허브](https://github.com/neuecc/UniRx)
 -   [UniRx 소개 slideshare](https://www.slideshare.net/agebreak/160402-unirx)
