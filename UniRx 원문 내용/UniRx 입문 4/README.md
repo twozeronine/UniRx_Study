@@ -129,17 +129,17 @@ Observable.EveryUpdate()는 호출 될 때마다 싱글톤 상에서 코루틴�
 UpdateAsObservable를 사용하면 좋을 것 같은 장소
 
 -   GameObject에 연관된 스트림을 이용한다.
-    -- OnDestroy시 OnCompleted가 발행되므로 수명 관리가 편하다
+    -   OnDestroy시 OnCompleted가 발행되므로 수명 관리가 편하다
 
 Observable.EveryUpdate()를 사용하면 좋을 것 같은 장소
 
 -   GameObject를 이용하지 않는 Pure한 Class에서 Update 이벤트를 이용하고 싶을 때
-    -- 싱글톤을 통해 Update 이벤트를 가져올 수 있으므로 MonoBehaviour를 상속하지 않아도 Update 이벤트를 사용할 수 있다.
+    -   싱글톤을 통해 Update 이벤트를 가져올 수 있으므로 MonoBehaviour를 상속하지 않아도 Update 이벤트를 사용할 수 있다.
 -   게임 중에 항상 존재하고 작동하는 스트림을 준비하고 싶을 때
-    -- 싱글톤을 사용하고 있기 때문에 OnCompleted가 자동으로 발동하지 않는다
-    -- 예시) [UniRx로 화면 상단에 FPS 카운터 만들기](https://tech.lonpeach.com/2019/10/23/UniRx-FPS-Counter/)
+    -   싱글톤을 사용하고 있기 때문에 OnCompleted가 자동으로 발동하지 않는다
+    -   예시) [UniRx로 화면 상단에 FPS 카운터 만들기](https://tech.lonpeach.com/2019/10/23/UniRx-FPS-Counter/)
 -   대량의 Update() 호출이 필요할 때
-    -- 소량의 Update() 호출보다 압도적으로 성능이 나온다.
+    -   소량의 Update() 호출보다 압도적으로 성능이 나온다.
 
 Observable.EveryUpdate() 쪽이 성능은 좋지만, Dispose를 해야 되는 단점이 있다.  
 에러가 나서 스트림이 멈추면 좋지만, 만약 계속 작동하는 경우이다. ( 이 경우 쓰레기 스트림이 대량으로 뒤에서 작동하고 있는다고 생각하면 된다. )
